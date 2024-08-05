@@ -12,3 +12,7 @@ ffmpeg (latest realese) - https://www.gyan.dev/ffmpeg/builds/
 export zip at any folder
 search for system variables and add to "Path" the path of `...\ffmpeg-version-essentials_build\bin`
 restart your terminal
+### Linux
+use your package manager + `ffmpeg`
+example:
+Arch - `pacman -S ffmpeg`
