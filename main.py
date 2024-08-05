@@ -2,7 +2,6 @@ import yt_dlp
 import os
 
 def download_playlist(playlist_url, audio_format='mp3', download_path='.', start=1, end=None):
-    # Создание пути, если он не существует
     if not os.path.exists(download_path):
         os.makedirs(download_path)
 
@@ -13,15 +12,16 @@ def download_playlist(playlist_url, audio_format='mp3', download_path='.', start
             'preferredcodec': audio_format,
             'preferredquality': '192',
         }],
+        'ignoreerrors': True,
         'yesplaylist': True,
-        'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),  # Путь и шаблон названия файла
-        'retries': 10,  # Количество повторных попыток
-        'socket_timeout': 15,  # Таймаут сокета в секундах
-        'playliststart': start,  # Начало диапазона
+        'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
+        'retries': 3,
+        'socket_timeout': 25,
+        'playliststart': start,
     }
 
     if end:
-        ydl_opts['playlistend'] = end  # Конец диапазона
+        ydl_opts['playlistend'] = end 
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([playlist_url])
@@ -30,8 +30,8 @@ if __name__ == "__main__":
     playlist_url = input("Введите URL плейлиста YouTube: ")
     #audio_format = 'm4a'
     audio_format = input("Введите желаемый аудиоформат (mp3 или m4a): ").lower()
-    #download_path = '/home/equa/Music/Loop/'
-    download_path = input("Введите путь для сохранения файлов (напр. /path/to/download): ")
+    #download_path = 'F:\Files_F\Loop'
+    download_path = input("Введите путь для сохранения файлов: ")
     start = int(input("Введите номер начального видео для скачивания: "))
     end_input = input("Введите номер конечного видео для скачивания (или оставьте пустым для скачивания до конца): ")
     end = int(end_input) if end_input else None
