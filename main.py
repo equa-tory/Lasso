@@ -28,16 +28,10 @@ def download_playlist(playlist_url, audio_format='mp3', download_path='.', start
 
 if __name__ == "__main__":
     playlist_url = input("Введите URL плейлиста YouTube: ")
-    #playlist_url = "https://www.youtube.com/playlist?list=PL4d3ASKA-XRUBJ9trFXOPfJv9SqcdXiLq"
-    #audio_format = input("Введите желаемый аудиоформат (mp3 или m4a): ").lower()
-    audio_format = 'm4a'
-    #download_path = input("Введите путь для сохранения файлов: ")
-    download_path = 'F:\Files_F\Loop'
+    audio_format = input("Введите желаемый аудиоформат: ").lower()
+    download_path = input("Введите путь для сохранения файлов: ")
     start = int(input("Введите номер начального видео для скачивания: "))
     end_input = input("Введите номер конечного видео для скачивания (или оставьте пустым для скачивания до конца): ")
     end = int(end_input) if end_input else None
 
-    if audio_format not in ['mp3', 'm4a']:
-        print("Неподдерживаемый формат. Используйте 'mp3' или 'm4a'.")
-    else:
-        download_playlist(playlist_url, audio_format, download_path, start, end)
+    download_playlist(playlist_url, audio_format, download_path, start, end)

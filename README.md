@@ -1,5 +1,5 @@
 # Lasso
-Lasso is an app to easily download **mp3/m4a** from youtube in form of single video, whole playlist or you can set start and last video.
+Lasso is an app to easily download **3gp, aac, flv, m4a, mp3, mp4, ogg, wav, webm** from youtube in form of single video, whole playlist or you can set start and last video.
 
 # Installation
 ```
