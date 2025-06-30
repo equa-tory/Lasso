@@ -38,13 +38,13 @@ if __name__ == "__main__":
 
     audio_input = input("Введите желаемый аудиоформат (оставьте пустым для 'm4a'): ").lower()
     audio_format = audio_input if audio_input else "m4a"
-    
+
     download_input = input("Введите путь для сохранения файлов (оставьте пустым для '/Users/equa/Downloads'): ")
     download_path = download_input if download_input else "/Users/equa/Downloads"
 
-    start_input = int(input("Введите номер начального видео для скачивания (оставьте пустым для 1): "))
-    start = start_input if start_input else 1
-    
+    start_input = input("Введите номер начального видео для скачивания (оставьте пустым для 1): ")
+    start = int(start_input) if start_input else 1
+
     end_input = input("Введите номер конечного видео для скачивания (оставьте пустым для скачивания до конца): ")
     end = int(end_input) if end_input else None
 
