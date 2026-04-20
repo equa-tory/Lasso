@@ -18,12 +18,21 @@ def download_playlist(playlist_url, audio_format, download_path, start, end):
                 'key': 'EmbedThumbnail',
             }
         ],
+        'nocheckcertificate': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android']
+            }
+        },
         'ignoreerrors': True,
         'yesplaylist': True,
         'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
         'retries': 3,
         'socket_timeout': 25,
         'playliststart': start,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        },
     }
 
     if end:
