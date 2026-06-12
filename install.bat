@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal
 title YouTube Downloader — Setup
 
 echo.
@@ -12,8 +12,7 @@ echo.
 python --version >nul 2>&1
 if errorlevel 1 (
     echo  ERROR: Python not found.
-    echo  Download: https://www.python.org/downloads/
-    echo  Tick "Add Python to PATH" during install.
+    echo  https://www.python.org/downloads/  — tick "Add Python to PATH"
     pause & exit /b 1
 )
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo  OK %%v
@@ -22,64 +21,53 @@ for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo  OK %%v
 deno --version >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo  Installing Deno (JS runtime required by yt-dlp)...
+    echo  Installing Deno...
     winget install DenoLand.Deno --accept-source-agreements --accept-package-agreements
-    if errorlevel 1 (
-        echo  WARNING: Deno install failed. Try manually: winget install DenoLand.Deno
-    )
 ) else (
-    for /f "tokens=1" %%v in ('deno --version 2^>^&1') do echo  OK Deno %%v
+    for /f "tokens=1-2" %%a in ('deno --version 2^>^&1 ^| findstr deno') do echo  OK %%a %%b
 )
 
 :: ── ffmpeg ────────────────────────────────────────────────────────────────────
 if exist "%~dp0ffmpeg\ffmpeg.exe" (
-    echo  OK ffmpeg found in .\ffmpeg\  ^(will be used automatically^)
+    echo  OK ffmpeg in .\ffmpeg\  ^(auto-detected^)
 ) else (
     ffmpeg -version >nul 2>&1
     if errorlevel 1 (
-        echo.
-        echo  ffmpeg not found. Installing via winget...
+        echo  Installing ffmpeg...
         winget install Gyan.FFmpeg --accept-source-agreements --accept-package-agreements
-        if errorlevel 1 echo  WARNING: Install manually or put ffmpeg.exe in .\ffmpeg\
-    ) else (
-        echo  OK ffmpeg found in system PATH
-    )
+    ) else ( echo  OK ffmpeg in system PATH )
 )
 
-:: ── Create bin\yt.bat if missing ──────────────────────────────────────────────
+:: ── bin\yt.bat and bin\yt_ui.bat ──────────────────────────────────────────────
 if not exist "%~dp0bin" mkdir "%~dp0bin"
-if not exist "%~dp0bin\yt.bat" (
-    (
-        echo @echo off
-        echo python "%%~dp0..\yt_download.py" %%*
-    ) > "%~dp0bin\yt.bat"
-    echo  Created bin\yt.bat
-)
 
-:: ── Add bin\ to user PATH permanently ────────────────────────────────────────
-set "BIN=%~dp0bin"
-if "%BIN:~-1%"=="\" set "BIN=%BIN:~0,-1%"
+(echo @echo off
+ echo python "%%~dp0..\yt_download.py" %%*
+) > "%~dp0bin\yt.bat"
 
-powershell -NoProfile -Command ^
-  "$cur = [Environment]::GetEnvironmentVariable('PATH','User');" ^
-  "if ($cur -notlike '*%BIN%*') {" ^
-  "  [Environment]::SetEnvironmentVariable('PATH', $cur + ';%BIN%', 'User');" ^
-  "  Write-Host '  Added to PATH: %BIN%'" ^
-  "} else {" ^
-  "  Write-Host '  PATH already contains bin\'" ^
-  "}"
+(echo @echo off
+ echo pythonw "%%~dp0..\yt_ui.py" %%*
+ echo if errorlevel 1 python "%%~dp0..\yt_ui.py" %%*
+) > "%~dp0bin\yt_ui.bat"
+
+echo  Created bin\yt.bat and bin\yt_ui.bat
+
+:: ── Add bin\ to user PATH (permanent, single-line PowerShell, no pipe) ────────
+::    Reads only the user PATH from registry — safe, no size-limit risk.
+::    -notlike '*…*' checks substring without needing Where-Object (avoids | pipe).
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$b=[System.IO.Path]::GetFullPath('%~dp0bin');$c=[Environment]::GetEnvironmentVariable('PATH','User');if($c -notlike ('*'+$b+'*')){[Environment]::SetEnvironmentVariable('PATH',($c+';'+$b).TrimStart(';'),'User');Write-Host '  Added to PATH.'}else{Write-Host '  Already in PATH.'}"
 
 echo.
 echo  ==========================================
-echo   Setup complete!
+echo   Done!  Open a NEW terminal window, then:
 echo.
-echo   Open a NEW terminal window and type:
-echo     yt --help
+echo     yt --help          CLI
+echo     yt_ui              GUI
 echo.
 echo   Examples:
-echo     yt 1-4 v https://youtube.com/playlist?list=...
+echo     yt 1-4 v https://youtube.com/playlist?...
 echo     yt 1 a https://youtu.be/...
-echo     yt          ^(interactive mode^)
+echo     yt l a https://...   ^(sync: new only^)
 echo  ==========================================
 echo.
 pause
