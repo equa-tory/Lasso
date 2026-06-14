@@ -195,7 +195,9 @@ def build_cmd(url: str, start: int, end: int, out_dir: str,
                 "bestvideo[ext=mp4]+bestaudio[ext=m4a]"
                 "/bestvideo[ext=mp4]+bestaudio"
                 "/bestvideo+bestaudio/best",
-                "--merge-output-format", "mp4"]
+                "--merge-output-format", "mp4",
+                "--write-thumbnail",          # save YouTube thumbnail as .jpg
+                "--convert-thumbnails", "jpg",]
 
     if listen:
         # Archive file per URL so each playlist has its own history
@@ -249,9 +251,12 @@ def listen_loop(url: str, out_dir: str, auth_key: str, mode_key: str,
             print(f"  [{ts}]  Check #{iteration} — scanning for new items…")
 
             # Full playlist scan — archive skips already-downloaded IDs
+            import time as _t; t0 = _t.time()
             cmd = build_cmd(url, 1, 99999, out_dir, auth_key, mode_key,
                             runtime_flag, listen=True)
             subprocess.run(cmd)
+            if MODE.get(mode_key) != "audio":
+                dlna_fix_dir(out_dir, cb=print, since_mtime=t0)
 
             ts = datetime.now().strftime("%H:%M:%S")
             print(f"  [{ts}]  Done.  Next check in {interval_min} min  (Ctrl-C to stop)")
@@ -263,6 +268,82 @@ def listen_loop(url: str, out_dir: str, auth_key: str, mode_key: str,
 
 
 
+
+# ─── DLNA fixes ───────────────────────────────────────────────────────────────
+
+VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v"}
+
+def dlna_fix_file(filepath: str, cb=None) -> bool:
+    """
+    Two quick fixes that make DLNA servers show previews:
+      1. External .jpg thumbnail — DLNA servers look for VideoName.jpg
+         alongside VideoName.mp4.  Generated from the video if missing.
+      2. Faststart remux — moves the MP4 moov atom to the start of the file
+         so DLNA servers can read metadata without buffering the whole file.
+         Uses -c copy (no re-encoding), typically takes a few seconds.
+    """
+    if not os.path.isfile(filepath):
+        return False
+
+    base  = os.path.splitext(filepath)[0]
+    thumb = base + ".jpg"
+    tmp   = filepath + "._dlna_.mp4"
+
+    # Thumbnail: only if missing (yt-dlp writes it for new downloads)
+    if not os.path.isfile(thumb):
+        if cb: cb(f"    thumbnail → {os.path.basename(thumb)}")
+        r = subprocess.run(
+            ["ffmpeg", "-i", filepath, "-ss", "3", "-vframes", "1",
+             "-q:v", "2", "-y", thumb],
+            capture_output=True,
+        )
+        if r.returncode != 0:
+            # very short video — try at 0s
+            subprocess.run(["ffmpeg", "-i", filepath, "-vframes", "1",
+                            "-q:v", "2", "-y", thumb], capture_output=True)
+
+    # Faststart remux (always — idempotent and fast)
+    if cb: cb(f"    faststart  → {os.path.basename(filepath)}")
+    r = subprocess.run(
+        ["ffmpeg", "-i", filepath, "-c", "copy",
+         "-movflags", "+faststart", "-y", tmp],
+        capture_output=True,
+    )
+    if r.returncode == 0 and os.path.isfile(tmp):
+        os.replace(tmp, filepath)
+        return True
+    if os.path.isfile(tmp):
+        os.remove(tmp)
+    return False
+
+
+def dlna_fix_dir(out_dir: str, cb=None, since_mtime: float = None):
+    """
+    Apply DLNA fixes to all video files in out_dir.
+    since_mtime: if given, only process files modified after that timestamp
+                 (used in listen mode to target only newly downloaded files).
+    """
+    if not os.path.isdir(out_dir):
+        return
+    files = sorted(
+        f for f in os.listdir(out_dir)
+        if os.path.splitext(f)[1].lower() in VIDEO_EXTS
+    )
+    if since_mtime:
+        files = [f for f in files
+                 if os.path.getmtime(os.path.join(out_dir, f)) >= since_mtime]
+    if not files:
+        if cb: cb("  DLNA: no new video files to process.")
+        return
+    if cb: cb(f"  DLNA fixes — {len(files)} file(s)…")
+    ok = 0
+    for i, fname in enumerate(files, 1):
+        if cb: cb(f"  [{i}/{len(files)}] {fname}")
+        if dlna_fix_file(os.path.join(out_dir, fname), cb):
+            ok += 1
+    if cb: cb(f"  DLNA done — {ok}/{len(files)} fixed.")
+
+
 def download(url, start, end, out_dir, auth_key, mode_key, runtime_flag,
              listen=False) -> int:
     os.makedirs(out_dir, exist_ok=True)
@@ -270,7 +351,11 @@ def download(url, start, end, out_dir, auth_key, mode_key, runtime_flag,
     cmd = build_cmd(url, start, end, out_dir, auth_key, mode_key, runtime_flag, listen)
     print(f"\n  {'audio (m4a)' if is_audio else 'video (mp4)'}  ·  items {start}–{end}"
           f"{'  [sync]' if listen else ''}  →  {os.path.abspath(out_dir)}\n")
-    return subprocess.run(cmd).returncode
+    import time as _t; t0 = _t.time()
+    rc = subprocess.run(cmd).returncode
+    if not is_audio:
+        dlna_fix_dir(out_dir, cb=print, since_mtime=t0)
+    return rc
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────

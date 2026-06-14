@@ -109,6 +109,10 @@ class App(tk.Tk):
         self._btn_stop = ttk.Button(bf, text="■  Stop",
                                      command=self._stop, width=8, state="disabled")
         self._btn_stop.pack(side="left")
+        ttk.Separator(bf, orient="vertical").pack(side="left", fill="y", padx=10, pady=3)
+        self._btn_dlna = ttk.Button(bf, text="🖼  Fix DLNA",
+                                     command=self._fix_dlna, width=12)
+        self._btn_dlna.pack(side="left")
         self._status = ttk.Label(bf, text="")
         self._status.pack(side="left", padx=12)
 
@@ -204,12 +208,17 @@ class App(tk.Tk):
                 interval_min = 5
             self._listen_stop = threading.Event()
             threading.Thread(target=self._run_listen,
-                             args=(cmd, interval_min), daemon=True).start()
+                             args=(cmd, interval_min, out_dir, mode_key),
+                             daemon=True).start()
         else:
-            threading.Thread(target=self._run, args=(cmd,), daemon=True).start()
+            threading.Thread(target=self._run,
+                             args=(cmd, out_dir, mode_key),
+                             daemon=True).start()
         self.after(80, self._poll)
 
-    def _run(self, cmd):
+    def _run(self, cmd, out_dir, mode_key):
+        import time
+        t0 = time.time()
         try:
             self._proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -222,9 +231,14 @@ class App(tk.Tk):
         except Exception as e:
             self._queue.put(f"\n⚠  Could not start: {e}\n")
             rc = 1
+        if mode_key != "2":  # not audio
+            self._queue.put("\n")
+            ytd.dlna_fix_dir(out_dir,
+                             cb=lambda m: self._queue.put(m + "\n"),
+                             since_mtime=t0)
         self._queue.put(("__done__", rc))
 
-    def _run_listen(self, first_cmd, interval_min):
+    def _run_listen(self, first_cmd, interval_min, out_dir, mode_key):
         """Infinite loop: run yt-dlp, sleep, repeat. _listen_stop signals exit."""
         import time
         from datetime import datetime
@@ -233,6 +247,8 @@ class App(tk.Tk):
             iteration += 1
             ts = datetime.now().strftime("%H:%M:%S")
             self._queue.put(f"\n  [{ts}]  Check #{iteration} — scanning for new items…\n")
+            import time
+            t0 = time.time()
             try:
                 self._proc = subprocess.Popen(
                     first_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -244,6 +260,11 @@ class App(tk.Tk):
             except Exception as e:
                 self._queue.put(f"  Error: {e}\n")
 
+            if mode_key != "2":  # not audio
+                self._queue.put("\n")
+                ytd.dlna_fix_dir(out_dir,
+                                 cb=lambda m: self._queue.put(m + "\n"),
+                                 since_mtime=t0)
             if self._listen_stop.is_set():
                 break
 
@@ -284,6 +305,37 @@ class App(tk.Tk):
         except queue.Empty:
             pass
         self.after(80, self._poll)
+
+    def _fix_dlna(self):
+        """Batch-process all existing videos in the current output folder."""
+        out_dir = self._output.get().strip()
+        if not out_dir or not os.path.isdir(out_dir):
+            self._log_write("⚠  Output folder not found.\n")
+            return
+        self._log_clear()
+        self._log_write(f"🖼  DLNA fix — scanning {out_dir}\n\n")
+        self._btn_dlna.config(state="disabled")
+        self._btn_dl.config(state="disabled")
+        def _task():
+            ytd.dlna_fix_dir(out_dir, cb=lambda m: self._queue.put(m + "\n"))
+            self._queue.put(("__dlna_done__", 0))
+        threading.Thread(target=_task, daemon=True).start()
+        self.after(80, self._poll_dlna)
+
+    def _poll_dlna(self):
+        try:
+            while True:
+                item = self._queue.get_nowait()
+                if isinstance(item, tuple) and item[0] == "__dlna_done__":
+                    self._btn_dlna.config(state="normal")
+                    self._btn_dl.config(state="normal")
+                    self._status.config(text="✅  DLNA fix done", foreground="#2a7")
+                    return
+                if isinstance(item, str):
+                    self._log_write(item)
+        except queue.Empty:
+            pass
+        self.after(80, self._poll_dlna)
 
     def _stop(self):
         if hasattr(self, "_listen_stop"):
